@@ -58,6 +58,8 @@ export function formatWebSearchResults(
 
 /**
  * Extract citations from OpenAI file_search annotations
+ * Note: Returns empty array as citations should not be displayed to users.
+ * Citations are tracked internally but formatted by the bot based on document type.
  */
 export function extractFileSearchCitations(
   annotations: Array<{
@@ -73,32 +75,12 @@ export function extractFileSearchCitations(
   }>,
   fileIdToTitle: Map<string, string>
 ): string[] {
-  const citations: string[] = [];
-
-  for (const annotation of annotations) {
-    let fileId: string | undefined;
-
-    if (annotation.type === 'file_citation' && annotation.file_citation) {
-      fileId = annotation.file_citation.file_id;
-    } else if (annotation.type === 'file_path' && annotation.file_path) {
-      fileId = annotation.file_path.file_id;
-    }
-
-    if (fileId) {
-      // Check if this is a canonical file ID that should be referenced directly
-      if (CANONICAL_FILE_IDS.has(fileId)) {
-        citations.push(formatCanonicalFileCitation(fileId));
-      } else {
-        // Use title-based citation for other files
-        const title = fileIdToTitle.get(fileId);
-        if (title) {
-          citations.push(formatKBCitation(title));
-        }
-      }
-    }
-  }
-
-  return [...new Set(citations)]; // Remove duplicates
+  // Citations are not formatted for display - the bot will format them
+  // appropriately based on document type (Article X, Section Y for formal docs,
+  // minimal hints for internal docs, no file names/KB references)
+  // This function still tracks citations internally but returns empty array
+  // to prevent formatted citations from being shown to users.
+  return [];
 }
 
 export default formatKBCitation;

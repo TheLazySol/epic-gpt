@@ -123,8 +123,10 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
     let userMessageContent = prompt;
 
     if (kbContent) {
-      const citationsText = kbCitations.length > 0 ? `\n\n**Citations:** ${kbCitations.join(', ')}` : '';
-      userMessageContent = `[Knowledge Base Context]\n${kbContent}${citationsText}\n\n---\n\nUser question: ${prompt}`;
+      // Pass raw content without formatted citations - bot will format citations
+      // appropriately based on document type (Article X, Section Y for formal docs,
+      // no file names/KB references for internal docs)
+      userMessageContent = `[Knowledge Base Context]\n${kbContent}\n\n---\n\nUser question: ${prompt}`;
     }
 
     if (webSearchEnabled) {
