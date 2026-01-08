@@ -174,16 +174,27 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
     // 4. Knowledge base context + user prompt (dynamic)
     // This ensures the static prefix (system + tools) is cached, while dynamic content comes after
     
-    // gpt-5-nano requires max_completion_tokens instead of max_tokens
+    // gpt-5 models (nano, mini) require max_completion_tokens instead of max_tokens
     // gpt-5-nano only supports default temperature (1), not custom values
+    // gpt-5-mini supports custom temperature
+    const isGpt5Model = OPENAI.MODEL.includes('gpt-5');
     const isNanoModel = OPENAI.MODEL.includes('nano');
+    // Extended prompt cache retention (24h) is only supported on:
+    // - gpt-5.2 variants
+    // - gpt-5.1 variants
+    // - gpt-4.1 models
+    // For other models, omit or use 'in_memory' (default)
+    const supportsExtendedCache = 
+      OPENAI.MODEL.includes('gpt-5.2') || 
+      OPENAI.MODEL.includes('gpt-5.1') || 
+      OPENAI.MODEL.includes('gpt-4.1');
     // Use guildId-based cache key for consistent caching across requests
     const promptCacheKey = `epicgpt_${guildId}`;
     let response = await openai.chat.completions.create({
       model: OPENAI.MODEL,
       messages,
       tools: tools.length > 0 ? tools : undefined,
-      ...(isNanoModel 
+      ...(isGpt5Model 
         ? { max_completion_tokens: OPENAI.MAX_TOKENS }
         : { max_tokens: OPENAI.MAX_TOKENS }
       ),
@@ -191,7 +202,11 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
       ...(isNanoModel ? {} : { temperature: OPENAI.TEMPERATURE }),
       // Prompt caching parameters (not yet in TypeScript types but supported by API)
       prompt_cache_key: promptCacheKey,
-      prompt_cache_retention: OPENAI.PROMPT_CACHE_RETENTION,
+      // Only include prompt_cache_retention if the model supports extended retention
+      ...(supportsExtendedCache && OPENAI.PROMPT_CACHE_RETENTION === '24h' 
+        ? { prompt_cache_retention: OPENAI.PROMPT_CACHE_RETENTION }
+        : {}
+      ),
     } as any);
 
     // Accumulate token usage from first call
@@ -238,13 +253,14 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
       }
 
       // Get next response
-      // gpt-5-nano requires max_completion_tokens instead of max_tokens
+      // gpt-5 models (nano, mini) require max_completion_tokens instead of max_tokens
       // gpt-5-nano only supports default temperature (1), not custom values
+      // gpt-5-mini supports custom temperature
       response = await openai.chat.completions.create({
         model: OPENAI.MODEL,
         messages,
         tools,
-        ...(isNanoModel 
+        ...(isGpt5Model 
           ? { max_completion_tokens: OPENAI.MAX_TOKENS }
           : { max_tokens: OPENAI.MAX_TOKENS }
         ),
@@ -252,7 +268,11 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
         ...(isNanoModel ? {} : { temperature: OPENAI.TEMPERATURE }),
         // Prompt caching parameters (not yet in TypeScript types but supported by API)
         prompt_cache_key: promptCacheKey,
-        prompt_cache_retention: OPENAI.PROMPT_CACHE_RETENTION,
+        // Only include prompt_cache_retention if the model supports extended retention
+        ...(supportsExtendedCache && OPENAI.PROMPT_CACHE_RETENTION === '24h' 
+          ? { prompt_cache_retention: OPENAI.PROMPT_CACHE_RETENTION }
+          : {}
+        ),
       } as any);
 
       // Accumulate token usage from subsequent calls

@@ -42,10 +42,10 @@ export const DISCORD = {
 // OpenAI (LLM & Embedding) configuration constants
 export const OPENAI = {
   // Main chat model for completions (default, fast & concise)
-  MODEL: 'gpt-5-nano', // Main chat model for completions (default, fast & concise)
-  ASSISTANT_MODEL: 'gpt-4o', // Assistant model for knowledge base search (gpt-5-nano doesn't support Assistants API)
+  MODEL: 'gpt-5-mini', // Main chat model for completions (default, fast & concise)
+  ASSISTANT_MODEL: 'gpt-4.1-2025-04-14', // Assistant model for knowledge base search
   MAX_TOKENS: 2048, // Maximum tokens to generate per response (Reduced for faster, more concise responses)
-  TEMPERATURE: 0.7,// Sampling temperature for creative/strictness balance
+  TEMPERATURE: 1,// Sampling temperature for creative/strictness balance
   CHUNK_SIZE: 1000, // Number of tokens per chunk for KB/document splitting
   CHUNK_OVERLAP: 200, // Token overlap between chunks for document splitting
   PROMPT_CACHE_RETENTION: '24h' as const, // Retention duration for cached prompts (for improved cache hit rates)

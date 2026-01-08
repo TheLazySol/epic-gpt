@@ -37,7 +37,8 @@ export async function searchKnowledgeBase(
     }
 
     // Create a temporary assistant with the vector store
-    // Note: gpt-5-nano doesn't support Assistants API, so we use gpt-4o for knowledge base search
+    // Note: Some models (e.g., gpt-5-nano) don't support Assistants API
+    // Using gpt-4.1-2025-04-14 which supports Assistants API with file_search tool
     const assistant = await openai.beta.assistants.create({
       name: 'Knowledge Base Search',
       model: OPENAI.ASSISTANT_MODEL,
