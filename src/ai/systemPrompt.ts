@@ -106,13 +106,18 @@ Always validate inputs before using tools and present results clearly.`;
 
 /**
  * Get the system prompt with optional context
+ * 
+ * Optimized for prompt caching: static base prompt comes first (cached),
+ * dynamic additions (webSearchEnabled, additionalContext) appended at end.
  */
 export function getSystemPrompt(options?: {
   webSearchEnabled?: boolean;
   additionalContext?: string;
 }): string {
+  // Base prompt is static and will be cached
   let prompt = SYSTEM_PROMPT;
 
+  // Dynamic additions appended at end (won't break cache for base prompt)
   if (options?.webSearchEnabled) {
       prompt += `\n\n## Web Search Mode
 Web search is ENABLED for this request. You should:

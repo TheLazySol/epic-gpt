@@ -28,6 +28,7 @@ export interface RunEpicGPTResult {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    cachedTokens?: number;
   };
 }
 
@@ -120,12 +121,15 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
     let usedWebSearch = false;
 
     // Build user message with knowledge base context
+    // Optimized for caching: KB content added after system message (dynamic content)
+    // System message (static, cached) → Previous messages (dynamic) → KB context + user prompt (dynamic)
     let userMessageContent = prompt;
 
     if (kbContent) {
       // Pass raw content without formatted citations - bot will format citations
       // appropriately based on document type (Article X, Section Y for formal docs,
       // no file names/KB references for internal docs)
+      // KB content is dynamic and comes after static system message for optimal cache hits
       userMessageContent = `[Knowledge Base Context]\n${kbContent}\n\n---\n\nUser question: ${prompt}`;
     }
 
@@ -160,11 +164,21 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
     let totalTokens = 0;
+    let totalCachedTokens = 0;
 
     // Call OpenAI
+    // Message structure optimized for prompt caching (static content first):
+    // 1. System message (static - cached across requests)
+    // 2. Tools (static - cached across requests)  
+    // 3. Previous conversation messages (dynamic)
+    // 4. Knowledge base context + user prompt (dynamic)
+    // This ensures the static prefix (system + tools) is cached, while dynamic content comes after
+    
     // gpt-5-nano requires max_completion_tokens instead of max_tokens
     // gpt-5-nano only supports default temperature (1), not custom values
     const isNanoModel = OPENAI.MODEL.includes('nano');
+    // Use guildId-based cache key for consistent caching across requests
+    const promptCacheKey = `epicgpt_${guildId}`;
     let response = await openai.chat.completions.create({
       model: OPENAI.MODEL,
       messages,
@@ -175,15 +189,22 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
       ),
       // gpt-5-nano only supports default temperature (1), so we omit it for nano models
       ...(isNanoModel ? {} : { temperature: OPENAI.TEMPERATURE }),
-      // Note: Knowledge base search is handled via Assistants API with vector store
-      // Results are injected into the Chat Completions context above
-    });
+      // Prompt caching parameters (not yet in TypeScript types but supported by API)
+      prompt_cache_key: promptCacheKey,
+      prompt_cache_retention: OPENAI.PROMPT_CACHE_RETENTION,
+    } as any);
 
     // Accumulate token usage from first call
     if (response.usage) {
       totalPromptTokens += response.usage.prompt_tokens ?? 0;
       totalCompletionTokens += response.usage.completion_tokens ?? 0;
       totalTokens += response.usage.total_tokens ?? 0;
+      // Track cached tokens for cache hit monitoring
+      const cachedTokens = response.usage.prompt_tokens_details?.cached_tokens ?? 0;
+      totalCachedTokens += cachedTokens;
+      if (cachedTokens > 0) {
+        console.log(`[Cache] Cache hit: ${cachedTokens}/${response.usage.prompt_tokens} tokens cached (${Math.round((cachedTokens / response.usage.prompt_tokens) * 100)}%)`);
+      }
     }
 
     let assistantMessage = response.choices[0]?.message;
@@ -229,13 +250,22 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
         ),
         // gpt-5-nano only supports default temperature (1), so we omit it for nano models
         ...(isNanoModel ? {} : { temperature: OPENAI.TEMPERATURE }),
-      });
+        // Prompt caching parameters (not yet in TypeScript types but supported by API)
+        prompt_cache_key: promptCacheKey,
+        prompt_cache_retention: OPENAI.PROMPT_CACHE_RETENTION,
+      } as any);
 
       // Accumulate token usage from subsequent calls
       if (response.usage) {
         totalPromptTokens += response.usage.prompt_tokens ?? 0;
         totalCompletionTokens += response.usage.completion_tokens ?? 0;
         totalTokens += response.usage.total_tokens ?? 0;
+        // Track cached tokens for cache hit monitoring
+        const cachedTokens = response.usage.prompt_tokens_details?.cached_tokens ?? 0;
+        totalCachedTokens += cachedTokens;
+        if (cachedTokens > 0) {
+          console.log(`[Cache] Cache hit: ${cachedTokens}/${response.usage.prompt_tokens} tokens cached (${Math.round((cachedTokens / response.usage.prompt_tokens) * 100)}%)`);
+        }
       }
 
       assistantMessage = response.choices[0]?.message;
@@ -262,6 +292,7 @@ export async function runEpicGPT(options: RunEpicGPTOptions): Promise<RunEpicGPT
         promptTokens: totalPromptTokens,
         completionTokens: totalCompletionTokens,
         totalTokens: totalTokens,
+        cachedTokens: totalCachedTokens > 0 ? totalCachedTokens : undefined,
       },
     };
   } catch (error) {
